@@ -114,8 +114,9 @@ namespace tesseract {
 }
 
 - (instancetype)initWithLanguage:(NSString *)language engineMode:(G8OCREngineMode)engineMode {
-    self = [self initWithLanguage:language];
+    self = [self init];
     _engineMode = engineMode;
+    self.language = language.copy;
     return self;
 }
 
