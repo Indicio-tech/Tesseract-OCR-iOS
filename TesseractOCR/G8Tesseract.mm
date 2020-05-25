@@ -151,24 +151,16 @@ namespace tesseract {
                  configFileNames:(NSArray *)configFileNames
                 absoluteDataPath:(NSString *)absoluteDataPath
                       engineMode:(G8OCREngineMode)engineMode {
-    
-    self = [self initWithLanguage:language engineMode:engineMode];
-
-    
+    self = [self init];
     if (self != nil) {
-
-        if (absoluteDataPath != nil) {
-            [self moveTessdataToDirectoryIfNecessary:absoluteDataPath];
-            _absoluteDataPath = absoluteDataPath.copy;
-        } else {
-            _absoluteDataPath = [NSBundle mainBundle].bundlePath;
-        }
+        _absoluteDataPath = absoluteDataPath;
+        setenv("TESSDATA_PREFIX", _absoluteDataPath.fileSystemRepresentation, 1);
+        _engineMode = engineMode;
         _configDictionary = configDictionary;
         _configFileNames = configFileNames;
-        
-        setenv("TESSDATA_PREFIX", [_absoluteDataPath stringByAppendingPathComponent:@"tessdata"].fileSystemRepresentation, 1);
-
+        self.language = language.copy;
     }
+    
     return self;
 }
 
@@ -206,7 +198,7 @@ namespace tesseract {
     for (int i = 0; i < count; i++) {
         configs[i] = ((NSString*)self.configFileNames[i]).fileSystemRepresentation;
     }
-    int returnCode = self.tesseract->Init([self.absoluteDataPath stringByAppendingPathComponent:@"tessdata"].fileSystemRepresentation, self.language.UTF8String,
+    int returnCode = self.tesseract->Init(self.absoluteDataPath.fileSystemRepresentation, self.language.UTF8String,
                                           (tesseract::OcrEngineMode)self.engineMode,
                                           (char **)configs, count,
                                           &tessKeys, &tessValues,
@@ -251,66 +243,6 @@ namespace tesseract {
     [self setVariableValue:_charBlacklist forKey:kG8ParamTesseditCharBlacklist];
     [self setVariableValue:[NSString stringWithFormat:@"%lu", (unsigned long)_pageSegmentationMode]
                     forKey:kG8ParamTesseditPagesegMode];
-}
-
-- (BOOL)moveTessdataToDirectoryIfNecessary:(NSString *)directoryPath
-{
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    
-    // Useful paths
-    NSString *tessdataFolderName = @"tessdata";
-    NSString *tessdataPath = [[NSBundle mainBundle].resourcePath stringByAppendingPathComponent:tessdataFolderName];
-    NSString *destinationPath = [directoryPath stringByAppendingPathComponent:tessdataFolderName];
-    NSLog(@"Tesseract destination path: %@", destinationPath);
-
-    BOOL isDirectory = YES;
-    if (![fileManager fileExistsAtPath:tessdataPath isDirectory:&isDirectory] || !isDirectory) {
-        // No tessdata directory in application bundle, nothing to do.
-        return NO;
-    }
-
-    if ([fileManager fileExistsAtPath:destinationPath] == NO) {
-        NSError *error = nil;
-        BOOL res = [fileManager createDirectoryAtPath:destinationPath withIntermediateDirectories:YES attributes:nil error:&error];
-        if (res == NO) {
-            NSLog(@"Error creating folder %@: %@", destinationPath, error);
-            return NO;
-        }
-    }
-    
-    BOOL result = YES;
-    NSError *error = nil;
-    NSArray *files = [fileManager contentsOfDirectoryAtPath:tessdataPath error:&error];
-    if (files == nil) {
-        NSLog(@"ERROR! %@", error.description);
-        result = NO;
-    } else {
-        for (NSString *filename in files) {
-            
-            NSString *destinationFileName = [destinationPath stringByAppendingPathComponent:filename];
-            if (![fileManager fileExistsAtPath:destinationFileName]) {
-                
-                NSString *filePath = [tessdataPath stringByAppendingPathComponent:filename];
-                //NSLog(@"found %@", filePath);
-                //NSLog(@"symlink in %@", destinationFileName);
-                
-                // delete broken symlinks first
-                [fileManager removeItemAtPath:destinationFileName error:&error];
-                
-                // than recreate it
-                error = nil;    // don't care about previous error, that can happens if we tried to remove a symlink, which doesn't exist
-                BOOL res = [fileManager createSymbolicLinkAtPath:destinationFileName
-                                             withDestinationPath:filePath
-                                                           error:&error];
-                if (res == NO) {
-                    NSLog(@"Error creating symlink %@: %@", destinationPath, error);
-                    result = NO;
-                }
-            }
-        }
-    }
-    
-    return result;
 }
 
 - (void)setVariableValue:(NSString *)value forKey:(NSString *)key
